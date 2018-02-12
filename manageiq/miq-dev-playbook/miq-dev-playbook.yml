@@ -36,8 +36,7 @@
         - libselinux-python
     - name: Check if Docker is already present
       become: yes
-      dnf:
-        list: docker
+      command: rpm -q docker
       register: docker
       ignore_errors: true
     - name: Install docker
@@ -45,7 +44,7 @@
       dnf:
         name: docker
         state: latest
-      when: docker.results[0] == ""
+      when: docker.stdout == "package docker is not installed"
     - name: Install nodejs packages for ManageIQ
       become: yes
       npm:
