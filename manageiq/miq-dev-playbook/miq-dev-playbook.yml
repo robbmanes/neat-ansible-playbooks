@@ -57,12 +57,6 @@
         - yarn
         - gulp-ci
         - webpack
-    - name: Start memcached service
-      become: yes
-      systemd:
-        state: started
-        enabled: yes
-        name: memcached
     - name: Start Docker service
       become: yes
       systemd:
