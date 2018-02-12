@@ -1,0 +1,161 @@
+- name: Configure a Fedora host for all-in-one ManageIQ development
+  hosts: miq
+  tasks:
+    - name: Include variables
+      include_vars: miq_vars.yml
+    - name: Install required packages for ManageIQ
+      become: yes
+      dnf: 
+        name: "{{ item }}"
+        state: latest
+      with_items:
+        - git-all
+        - postgresql-devel
+        - postgresql-server
+        - bzip2
+        - libffi-devel
+        - readline-devel
+        - libxml2-devel
+        - libxslt-devel
+        - patch
+        - sqlite-devel
+        - nodejs
+        - libcurl-devel
+        - npm
+        - openssl-devel
+        - openscap
+        - ruby
+        - ruby-devel
+        - rubygem-bundler
+        - rubygem-rake
+        - python-docker-py
+        - gcc
+        - gcc-c++
+        - cmake
+        - redhat-rpm-config
+        - libselinux-python
+    - name: Check if Docker is already present
+      become: yes
+      dnf:
+        list: docker
+      register: docker
+      ignore_errors: true
+    - name: Install docker
+      become: yes
+      dnf:
+        name: docker
+        state: latest
+      when: docker.results[0] == ""
+    - name: Install nodejs packages for ManageIQ
+      become: yes
+      npm:
+        name: "{{ item }}"
+        state: latest
+        global: yes
+      with_items:
+        - bower
+        - yarn
+        - gulp-ci
+        - webpack
+    - name: Start memcached service
+      become: yes
+      systemd:
+        state: started
+        enabled: yes
+        name: memcached
+    - name: Start Docker service
+      become: yes
+      systemd:
+        state: started
+        enabled: yes
+        name: docker
+    - name: Create postgres v9.5 docker container
+      become: yes
+      docker_container:
+        name: miq-postgres95
+        image: postgres:9.5
+        ports:
+          - "5432:5432"
+        env:
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: smartvm
+          POSTGRES_DB: vmdb_development
+    - name: Create memcached docker container
+      become: yes
+      docker_container:
+        name: miq-memcached
+        image: memcached
+        ports:
+          - "11211:11211"
+    - name: Create ManageIQ directory
+      file:
+        path: "{{ miq_path }}"
+        state: directory
+    - name: Clone main repository to ManageIQ repository
+      git:
+        repo: "https://github.com/{{ github_username }}/manageiq.git"
+        dest: "{{ miq_path }}"
+        clone: yes
+        update: yes
+    - name: Install necessary gems with bundler (may take a while...)
+      bundler:
+        state: present
+        chdir: "{{ miq_path }}"
+        executable: "{{ miq_path }}/bin/bundle"
+    - name: Change database configuration to use the local container
+      lineinfile:
+        path: "{{ miq_path }}/config/database.yml"
+        insertafter: "database: vmdb_development"
+        line: "{{ item }}"
+        create: yes
+        state: present
+      with_items:
+        - "development:"
+        - "  password: v2:{peSkS1L4l7mZPKWfHeC7xg==}"
+        - "  database: vmdb_development"
+        - "  username: root"
+        - "  host: localhost"
+        - "  adapter: postgresql"
+        - "  encoding: utf8"
+        - "  pool: 5"
+        - "  wait_timeout: 5"
+    - name: Copy v2_key
+      copy:
+        src: "{{ miq_path }}/certs/v2_key.dev"
+        dest: "{{ miq_path }}/certs/v2_key"
+    - name: Change database password
+      shell: bundle exec ruby tools/fix_auth.rb --databaseyml --password smartvm
+      args:
+        chdir: "{{ miq_path }}"
+    - name: Update and migrate the database (may take a while...)
+      shell: bin/update
+      args:
+        chdir: "{{ miq_path }}"
+      ignore_errors: yes
+    - name: Run setup scripts (may take a while...)
+      shell: bin/setup
+      args:
+        chdir: "{{ miq_path }}"
+      ignore_errors: yes
+    - name: Create plugins directory
+      file:
+         path: "{{ miq_path }}/plugins"
+         state: directory
+    - name: Clone plugins
+      git:
+        repo: "{{ item.value }}"
+        clone: yes
+        dest: "{{ miq_path }}/plugins/{{ item.key }}"
+        update: yes
+      with_dict: "{{ miq_plugins }}"
+    - name: Override default plugin locations
+      lineinfile:
+        path: "{{ miq_path }}/bundler.d/local_plugins.rb"
+        create: yes
+        state: present
+        line: "override_gem '{{ item.key }}', :path => File.expand_path('{{ miq_path }}/plugins/{{ item.key }}')"
+      with_dict: "{{ miq_plugins }}"
+    - name: Start EVM service
+      shell: bundle exec rake evm:start
+      args:
+        chdir: "{{ miq_path }}"
