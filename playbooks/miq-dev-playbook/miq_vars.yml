@@ -1,5 +1,5 @@
 github_username: ManageIQ
-miq_path: /home/rmanes/Source/ManageIQ
+miq_path: /root/ManageIQ
 miq_plugins:
   manageiq-gems-pending: "https://github.com/ManageIQ/manageiq-gems-pending.git"
   manageiq-providers-ansible_tower: "https://github.com/ManageIQ/manageiq-providers-ansible_tower.git"
