@@ -1,0 +1,38 @@
+- name: Configure management repositories for development
+  hosts: local
+  tasks:
+    - name: Include variables
+      include_vars: mps_vars.yml
+    - name: Create repository path
+      file:
+        path: "{{ mps_path }}"
+        state: directory
+    - name: Create subrepository paths
+      file:
+        path: "{{ item }}"
+        state: directory
+      with_items:
+        - sysmgmt
+        - ansible
+        - miq
+    - name: Clone Systems Management repositories
+      git:
+        repo: "{{ item.value }}"
+        clone: yes
+        dest: "{{ mps_path }}/sysmgmt/{{ item.key }}"
+        update: yes
+      with_dict: "{{ sysmgmt_repos }}"
+    - name: Clone Ansible repositories
+      git:
+        repo: "{{ item.value }}"
+        clone: yes
+        dest: "{{ mps_path }}/ansible/{{ item.key }}"
+        update: yes
+      with_dict: "{{ ansible_repos }}"
+    - name: Clone ManageIQ repositories
+      git:
+        repo: "{{ item.value }}"
+        clone: yes
+        dest: "{{ mps_path }}/miq/{{ item.key }}"
+        update: yes
+      with_dict: "{{ miq_repos }}"
