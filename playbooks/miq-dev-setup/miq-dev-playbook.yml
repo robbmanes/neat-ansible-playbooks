@@ -6,9 +6,7 @@
     - name: Install required packages for ManageIQ
       become: yes
       dnf: 
-        name: "{{ item }}"
-        state: latest
-      with_items:
+        name:     
         - git-all
         - postgresql-devel
         - postgresql-server
@@ -28,12 +26,12 @@
         - ruby-devel
         - rubygem-bundler
         - rubygem-rake
-        - python-docker-py
         - gcc
         - gcc-c++
         - cmake
         - redhat-rpm-config
         - libselinux-python
+        state: latest
     - name: Check if Docker is already present
       become: yes
       command: rpm -q docker
@@ -45,6 +43,10 @@
         name: docker
         state: latest
       when: docker.stdout == "package docker is not installed"
+    - name: Install docker module for python
+      become: yes
+      pip:       
+        name: docker
     - name: Install nodejs packages for ManageIQ
       become: yes
       npm:
@@ -91,11 +93,13 @@
         clone: yes
         update: yes
     - name: Install necessary gems with bundler (may take a while...)
+      become: yes
       bundler:
         state: present
         chdir: "{{ miq_path }}"
         executable: "{{ miq_path }}/bin/bundle"
     - name: Change database configuration to use the local container
+      become: yes
       lineinfile:
         path: "{{ miq_path }}/config/database.yml"
         insertafter: "database: vmdb_development"
@@ -117,15 +121,18 @@
         src: "{{ miq_path }}/certs/v2_key.dev"
         dest: "{{ miq_path }}/certs/v2_key"
     - name: Change database password
+      become: yes
       shell: bundle exec ruby tools/fix_auth.rb --databaseyml --password smartvm
       args:
         chdir: "{{ miq_path }}"
     - name: Update and migrate the database (may take a while...)
+      become: yes
       shell: bin/update
       args:
         chdir: "{{ miq_path }}"
       ignore_errors: yes
     - name: Run setup scripts (may take a while...)
+      become: yes
       shell: bin/setup
       args:
         chdir: "{{ miq_path }}"
@@ -149,6 +156,7 @@
         line: "override_gem '{{ item.key }}', :path => File.expand_path('{{ miq_path }}/plugins/{{ item.key }}')"
       with_dict: "{{ miq_plugins }}"
     - name: Start EVM service
+      become: yes
       shell: bundle exec rake evm:start
       args:
         chdir: "{{ miq_path }}"
